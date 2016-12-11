@@ -1,4 +1,4 @@
-package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
+ package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationConfig;
@@ -35,6 +35,8 @@ import static org.springframework.web.util.UriComponentsBuilder.newInstance;
 @SpringBootTest(webEnvironment = RANDOM_PORT)
 public class ApplicationTest {
 
+    // todo better test methods' names
+
     @Autowired
     TestRestTemplate testRestTemplate;
 
@@ -42,29 +44,50 @@ public class ApplicationTest {
     int port;
 
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    public static final ObjectWriter JSON_WRITER = OBJECT_MAPPER.writerWithDefaultPrettyPrinter(); // todo
+    public static final ObjectWriter JSON_WRITER = OBJECT_MAPPER.writerWithDefaultPrettyPrinter();
     static {
         OBJECT_MAPPER.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     @Test
-    public void createsUsersThroughCustomController_onJsonInput() throws Exception {
-        User expected = new User(randomString(), randomString());
+    // application/json > default JSON HttpMessageConverter > User > repo
+    public void createsUsersThroughSpringDataRestController_fromJsonMediaTypeInput() throws Exception {
+        User expected = newExpectedUser();
 
         testPostWithContentType("application/json", () -> asJson(expected), expected);
     }
 
     @Test
-    public void createsUsersThroughCustomController_onCsvInput() throws Exception {
-        User expected = new User(randomString(), randomString());
+    // made/up > MadeUpFormatToUserHttpMessageConverter > User > repo
+    public void createsUsersThroughSpringDataRestController_fromCustomMediaTypeInput() throws Exception {
+        User expected = newExpectedUser();
+
+        testPostWithContentType("made/up", () -> asMadeUpFormat(expected), expected);
+    }
+
+    @Test
+    // made/up-2 > standard StringHttpMessageConverter > String > custom MVC controller > User > repo
+    public void createsUsersThroughSpringDataRestController_fromAnotherCustomMediaTypeInput() throws Exception {
+        User expected = newExpectedUser();
+
+        testPostWithContentType("made/up-2", () -> asMadeUpFormat2(expected), expected);
+    }
+
+    @Test
+    // text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User > repo
+    public void createsUsersThroughCustomController_fromCsvMediaTypeInput() throws Exception {
+        User expected = newExpectedUser();
 
         testPostWithContentType("text/csv", () -> asCsv(expected, "firstName", "lastName"), expected);
+    }
+
+    private User newExpectedUser() {
+        return new User(randomString(), randomString());
     }
 
     private void testPostWithContentType(final String contentType, final Supplier<String> stringSupplier, final User expected) {
 
         // given
-
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.set("Content-Type", contentType);
 
@@ -88,7 +111,7 @@ public class ApplicationTest {
         assertThat(actual.getFirstName(), is(expected.getFirstName()));
         assertThat(actual.getLastName(), is(expected.getLastName()));
 
-        // todo test more details
+        // todo assert more details (e.g. HAL metadata)?
     }
 
     private String randomString() {
@@ -99,15 +122,18 @@ public class ApplicationTest {
 
     private void prettyPrint(final ResponseEntity<String> responseEntity) {
 
+        System.out.println("");
         System.out.println("= RESPONSE =============================>");
         System.out.println(" status: " + responseEntity.getStatusCode());
         System.out.println("headers: " + responseEntity.getHeaders());
         System.out.println("   body: ");
         System.out.println(responseEntity.getBody());
         System.out.println("<=======================================");
+        System.out.println("");
     }
 
     private void prettyPrint(final RequestEntity<String> requestEntity) {
+        System.out.println("");
         System.out.println("= REQUEST ============================>");
         System.out.println(" method: " + requestEntity.getMethod());
         System.out.println("    uri: " + requestEntity.getUrl());
@@ -115,6 +141,7 @@ public class ApplicationTest {
         System.out.println("   body: ");
         System.out.println(requestEntity.getBody());
         System.out.println("<=======================================");
+        System.out.println("");
     }
 
     private static <T> T asObject(Class<T> clazz, String responseBody) {
@@ -123,6 +150,14 @@ public class ApplicationTest {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String asMadeUpFormat(User user) {
+        return user.getFirstName() + ";" + user.getLastName();
+    }
+
+    private static String asMadeUpFormat2(User user) {
+        return user.getFirstName() + "|" + user.getLastName();
     }
 
     private static String asJson(Object object) {

@@ -12,16 +12,19 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
+import static java.util.stream.Collectors.joining;
 
-public class CsvToUserHttpMessageConverter implements HttpMessageConverter<User> {
+// todo tests + docs
+public class MadeUpFormatToUserHttpMessageConverter implements HttpMessageConverter<User> {
 
-    public static final MediaType CSV_MEDIA_TYPE = new MediaType("text", "csv");
+    public static final MediaType MEDIA_TYPE = new MediaType("made", "up");
 
     @Override
     public boolean canRead(final Class<?> clazz, final MediaType mediaType) {
-        return mediaType != null && mediaType.isCompatibleWith(CSV_MEDIA_TYPE);
+        return mediaType != null && mediaType.isCompatibleWith(MEDIA_TYPE);
     }
 
     @Override
@@ -31,7 +34,7 @@ public class CsvToUserHttpMessageConverter implements HttpMessageConverter<User>
 
     @Override
     public List<MediaType> getSupportedMediaTypes() {
-        return singletonList(CSV_MEDIA_TYPE);
+        return singletonList(MEDIA_TYPE);
     }
 
     // todo auto formatting
@@ -40,13 +43,13 @@ public class CsvToUserHttpMessageConverter implements HttpMessageConverter<User>
     @Override
     public User read(final Class<? extends User> clazz, final HttpInputMessage inputMessage) throws IOException, HttpMessageNotReadableException {
 
-        // todo license
-        final CSVReader csvReader = new CSVReader(new BufferedReader(new InputStreamReader(inputMessage.getBody())));
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputMessage.getBody()));
+        final String line = bufferedReader.lines().findFirst().get();
 
-        final String[] line = csvReader.readAll().get(1);
+        final String[] fields = line.split(";");
 
-        final String firstName = line[0];
-        final String lastName = line[1];
+        final String firstName = fields[0];
+        final String lastName = fields[1];
 
         return new User(firstName, lastName);
     }

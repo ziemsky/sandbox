@@ -1,34 +1,37 @@
  package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationConfig;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.embedded.LocalServerPort;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.*;
-import org.springframework.test.context.junit4.SpringRunner;
+ import com.fasterxml.jackson.core.JsonProcessingException;
+ import com.fasterxml.jackson.databind.DeserializationFeature;
+ import com.fasterxml.jackson.databind.ObjectMapper;
+ import com.fasterxml.jackson.databind.ObjectWriter;
+ import org.junit.Before;
+ import org.junit.Test;
+ import org.junit.runner.RunWith;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.boot.context.embedded.LocalServerPort;
+ import org.springframework.boot.test.context.SpringBootTest;
+ import org.springframework.boot.test.web.client.TestRestTemplate;
+ import org.springframework.http.RequestEntity;
+ import org.springframework.http.ResponseEntity;
+ import org.springframework.test.context.junit4.SpringRunner;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.StringJoiner;
-import java.util.UUID;
-import java.util.function.Supplier;
-import java.util.stream.Stream;
+ import java.io.IOException;
+ import java.util.StringJoiner;
+ import java.util.UUID;
+ import java.util.stream.Stream;
 
-import static java.lang.String.join;
-import static java.lang.String.valueOf;
-import static java.util.stream.Collectors.joining;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
-import static org.springframework.test.util.ReflectionTestUtils.getField;
-import static org.springframework.web.util.UriComponentsBuilder.newInstance;
+ import static io.restassured.RestAssured.config;
+ import static io.restassured.RestAssured.given;
+ import static io.restassured.config.EncoderConfig.encoderConfig;
+ import static io.restassured.http.ContentType.TEXT;
+ import static java.lang.String.join;
+ import static java.lang.String.valueOf;
+ import static java.util.stream.Collectors.joining;
+ import static org.hamcrest.Matchers.startsWith;
+ import static org.hamcrest.core.Is.is;
+ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
+ import static org.springframework.test.util.ReflectionTestUtils.getField;
+ import static org.springframework.web.util.UriComponentsBuilder.newInstance;
 
 @RunWith(SpringRunner.class)
 //@SpringBootTest(webEnvironment = RANDOM_PORT, properties = "logging.level.org.springframework=DEBUG") // todo comment?
@@ -49,69 +52,60 @@ public class ApplicationTest {
         OBJECT_MAPPER.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
+    private User expected;
+
+    @Before
+    public void setUp() throws Exception {
+        expected = new User(randomString(), randomString());
+    }
+
     @Test
     // application/json > default JSON HttpMessageConverter > User > repo
     public void createsUsersThroughSpringDataRestController_fromJsonMediaTypeInput() throws Exception {
-        User expected = newExpectedUser();
 
-        testPostWithContentType("application/json", () -> asJson(expected), expected);
+        testPostWithContentType("application/json", ApplicationTest::asJson, expected);
     }
 
     @Test
     // made/up > MadeUpFormatToUserHttpMessageConverter > User > repo
     public void createsUsersThroughSpringDataRestController_fromCustomMediaTypeInput() throws Exception {
-        User expected = newExpectedUser();
 
-        testPostWithContentType("made/up", () -> asMadeUpFormat(expected), expected);
-    }
-
-    @Test
-    // made/up-2 > standard StringHttpMessageConverter > String > custom MVC controller > User > repo
-    public void createsUsersThroughSpringDataRestController_fromAnotherCustomMediaTypeInput() throws Exception {
-        User expected = newExpectedUser();
-
-        testPostWithContentType("made/up-2", () -> asMadeUpFormat2(expected), expected);
+        testPostWithContentType("made/up", ApplicationTest::asMadeUpFormat, expected);
     }
 
     @Test
     // text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User > repo
     public void createsUsersThroughCustomController_fromCsvMediaTypeInput() throws Exception {
-        User expected = newExpectedUser();
 
-        testPostWithContentType("text/csv", () -> asCsv(expected, "firstName", "lastName"), expected);
+        testPostWithContentType("text/csv", user -> asCsv(user, "firstName", "lastName"), expected);
     }
 
-    private User newExpectedUser() {
-        return new User(randomString(), randomString());
+    @Test
+    // made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User > repo
+    public void createsUsersThroughSpringDataRestController_fromAnotherCustomMediaTypeInput() throws Exception {
+
+        testPostWithContentType("made/up-2", ApplicationTest::asMadeUpFormat2, expected);
     }
 
-    private void testPostWithContentType(final String contentType, final Supplier<String> stringSupplier, final User expected) {
+    private void testPostWithContentType(final String contentType, final Converter<User> userConverter, final User expected) {
 
-        // given
-        HttpHeaders httpHeaders = new HttpHeaders();
-        httpHeaders.set("Content-Type", contentType);
+        String endpointUri = newInstance().scheme("http").host("localhost").port(port).pathSegment("users").toUriString();
 
-        URI endpointUri = newInstance().scheme("http").host("localhost").port(port).pathSegment("users").build().toUri();
-
-        RequestEntity<String> requestEntity = new RequestEntity<>(stringSupplier.get(), httpHeaders, HttpMethod.POST, endpointUri);
-
-        prettyPrint(requestEntity);
-
-        // when
-        ResponseEntity<String> responseEntity = testRestTemplate.exchange(requestEntity, String.class);
-
-
-        // then
-        prettyPrint(responseEntity);
-
-        assertThat(responseEntity.getStatusCode(), is(HttpStatus.CREATED));
-
-        User actual = asObject(User.class, responseEntity.getBody());
-
-        assertThat(actual.getFirstName(), is(expected.getFirstName()));
-        assertThat(actual.getLastName(), is(expected.getLastName()));
-
-        // todo assert more details (e.g. HAL metadata)?
+        // @formatter:off
+        given()
+            .config(config().encoderConfig(encoderConfig().encodeContentTypeAs(contentType, TEXT)))
+            .contentType(contentType).body(userConverter.toTestedFormat(expected))
+        .when()
+            .post(endpointUri)
+            .prettyPeek()
+        .then()
+            .contentType("application/hal+json;charset=UTF-8")
+            .body("firstName",        is(expected.getFirstName()))
+            .body("lastName",         is(expected.getLastName()))
+            .body("_links.self.href", startsWith(endpointUri))
+            .body("_links.user.href", startsWith(endpointUri))
+        ;
+        // @formatter:on
     }
 
     private String randomString() {
@@ -181,5 +175,10 @@ public class ApplicationTest {
             )
             .toString();
         // @formatter:on
+    }
+
+    @FunctionalInterface
+    private interface Converter<T> {
+        String toTestedFormat(T source);
     }
 }

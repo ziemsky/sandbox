@@ -10,17 +10,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-
-import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
-import static org.springframework.hateoas.mvc.ControllerLinkBuilder.methodOn;
-import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
 @RepositoryRestController
 public class UserController {
@@ -33,41 +28,37 @@ public class UserController {
         this.repositoryEntityLinks = entityLinks;
     }
 
-    // todo methods' names
     @PostMapping(path = "/users", consumes = {"text/csv"})
     public @ResponseBody ResponseEntity<?> createUserFromCsv(@RequestBody InputStream body) {
 
-        User user = csvToUser(body);
-
-        final User newUser = userRepository.save(user);
-
-        final Resource<User> resource = new Resource<>(newUser);
-
-//        Link userLink = repositoryEntityLinks.linkToSingleResource(userRepository.getClass(), newUser.getId());
-//        Link createUserFromJsonLink = linkTo(methodOn(UserController.class).createUserFromCsv(user)).withSelfRel();
-//        resource.add(createUserFromJsonLink, userLink);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(resource);
+        return handleCreateUserRequest(csvToUser(body));
     }
 
+    // todo made-up content types and methods' names
     @PostMapping(path = "/users", consumes = {"made/up-2"})
     public @ResponseBody ResponseEntity<?> createUserFromMadeUp2(@RequestBody String body) {
 
-        String[] line = body.split("\\|");
-        User user = new User(line[0], line[1]);
+        return handleCreateUserRequest(madeUp2ToUser(body));
+    }
+
+    private ResponseEntity<?> handleCreateUserRequest(final User user) {
 
         final User newUser = userRepository.save(user);
 
         final Resource<User> resource = new Resource<>(newUser);
 
-//        Link userLink = repositoryEntityLinks.linkToSingleResource(userRepository.getClass(), newUser.getId());
-//        Link createUserFromJsonLink = linkTo(methodOn(UserController.class).createUserFromCsv(user)).withSelfRel();
-//        resource.add(createUserFromJsonLink, userLink);
+        Link endpointLink = repositoryEntityLinks.linkToSingleResource(User.class, newUser.getId());
+        resource.add(endpointLink.withSelfRel(), endpointLink.withRel("user"));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(resource);
     }
 
     // todo createUserFromUploadedCsv using web browser - see:
+
+    private User madeUp2ToUser(final @RequestBody String body) {
+        String[] line = body.split("\\|");
+        return new User(line[0], line[1]);
+    }
     // - http://docs.spring.io/spring/docs/current/spring-framework-reference/html/mvc.html#mvc-multipart
     // - @RequestPart
 

@@ -21,7 +21,7 @@ public class ApplicationConfiguration {
             @Override
             public void configureHttpMessageConverters(final List<HttpMessageConverter<?>> messageConverters) {
                 messageConverters.add(new CsvToInputStreamHttpMessageConverter());
-                messageConverters.add(new MadeUpFormatToUserHttpMessageConverter());
+                messageConverters.add(new MadeUpFormatOneToUserHttpMessageConverter());
                 messageConverters.add(new StringHttpMessageConverter());
 
                 messageConverters.forEach(httpMessageConverter -> System.out.println(httpMessageConverter.getClass()

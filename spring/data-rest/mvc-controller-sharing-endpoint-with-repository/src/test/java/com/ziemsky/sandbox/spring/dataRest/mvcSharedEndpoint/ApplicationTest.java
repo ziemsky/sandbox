@@ -1,44 +1,56 @@
- package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
+package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
 
- import com.fasterxml.jackson.core.JsonProcessingException;
- import com.fasterxml.jackson.databind.DeserializationFeature;
- import com.fasterxml.jackson.databind.ObjectMapper;
- import com.fasterxml.jackson.databind.ObjectWriter;
- import org.junit.Before;
- import org.junit.Test;
- import org.junit.runner.RunWith;
- import org.springframework.beans.factory.annotation.Autowired;
- import org.springframework.boot.context.embedded.LocalServerPort;
- import org.springframework.boot.test.context.SpringBootTest;
- import org.springframework.boot.test.web.client.TestRestTemplate;
- import org.springframework.http.RequestEntity;
- import org.springframework.http.ResponseEntity;
- import org.springframework.test.context.junit4.SpringRunner;
+import io.restassured.filter.log.RequestLoggingFilter;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.embedded.LocalServerPort;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.test.context.junit4.SpringRunner;
 
- import java.io.IOException;
- import java.util.StringJoiner;
- import java.util.UUID;
- import java.util.stream.Stream;
+import javax.annotation.PostConstruct;
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.StringJoiner;
+import java.util.stream.Stream;
 
- import static io.restassured.RestAssured.config;
- import static io.restassured.RestAssured.given;
- import static io.restassured.config.EncoderConfig.encoderConfig;
- import static io.restassured.http.ContentType.TEXT;
- import static java.lang.String.join;
- import static java.lang.String.valueOf;
- import static java.util.stream.Collectors.joining;
- import static org.hamcrest.Matchers.startsWith;
- import static org.hamcrest.core.Is.is;
- import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
- import static org.springframework.test.util.ReflectionTestUtils.getField;
- import static org.springframework.web.util.UriComponentsBuilder.newInstance;
+import static com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.RandomUtil.randomString;
+import static io.restassured.RestAssured.config;
+import static io.restassured.RestAssured.given;
+import static io.restassured.config.EncoderConfig.encoderConfig;
+import static io.restassured.http.ContentType.TEXT;
+import static java.lang.String.join;
+import static java.lang.String.valueOf;
+import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toList;
+import static org.hamcrest.Matchers.startsWith;
+import static org.hamcrest.core.Is.is;
+import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
+import static org.springframework.test.util.ReflectionTestUtils.getField;
+import static org.springframework.web.util.UriComponentsBuilder.newInstance;
 
+/**
+ * <p>
+ *     Demonstrates that custom Spring MVC controller can share the same endpoint as Spring Data REST repository,
+ *     with requests being mapped to one or the other depending on their content type.
+ * </p>
+ * <p>
+ *     Additionally, various ways of converting request body to format most convenient to handle by individual endpoints
+ *     are exercised where some conversion is done in message converters (custom and provided by the framework) and
+ *     some within custom controllers.
+ * </p>
+ * <p>
+ *     Note that this test is satisfied with receiving expected payload and success status in response to the POST
+ *     requests rather than going to the database to check that new records have actually been created there but that
+ *     was enough for what it was intended for. One can verify that the requests actually go through expected handlers
+ *     by disabling selected controller methods or message converters and re-running the tests.
+ * </p>
+ */
 @RunWith(SpringRunner.class)
-//@SpringBootTest(webEnvironment = RANDOM_PORT, properties = "logging.level.org.springframework=DEBUG") // todo comment?
 @SpringBootTest(webEnvironment = RANDOM_PORT)
 public class ApplicationTest {
-
-    // todo better test methods' names
 
     @Autowired
     TestRestTemplate testRestTemplate;
@@ -46,130 +58,120 @@ public class ApplicationTest {
     @LocalServerPort
     int port;
 
-    public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    public static final ObjectWriter JSON_WRITER = OBJECT_MAPPER.writerWithDefaultPrettyPrinter();
-    static {
-        OBJECT_MAPPER.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    }
-
     private User expected;
+    private String endpointUri;
 
     @Before
-    public void setUp() throws Exception {
+    public void beforeEachTest() throws Exception {
         expected = new User(randomString(), randomString());
     }
 
-    @Test
-    // application/json > default JSON HttpMessageConverter > User > repo
-    public void createsUsersThroughSpringDataRestController_fromJsonMediaTypeInput() throws Exception {
-
-        testPostWithContentType("application/json", ApplicationTest::asJson, expected);
+    @PostConstruct
+    public void beforeAllTests() {
+        endpointUri = newInstance().scheme("http").host("localhost").port(port).pathSegment("users").toUriString();
     }
 
     @Test
-    // made/up > MadeUpFormatToUserHttpMessageConverter > User > repo
-    public void createsUsersThroughSpringDataRestController_fromCustomMediaTypeInput() throws Exception {
+    // Given no custom message converter is configured to consume JSON request content type
+    //   And no custom controller is configured to consume JSON request content type
+    //  When POST request is made with body in JSON format
+    //  Then request body is converted to entity class through default Jackson object mapper
+    //   And the record is created through Spring Data REST endpoint/repository
+    public void createsRecordsThroughSpringDataRest_fromJsonMediaTypeInput() {
 
-        testPostWithContentType("made/up", ApplicationTest::asMadeUpFormat, expected);
+        // Flow: application/json > default JSON HttpMessageConverter > User > UserRepository
+
+        testPostWithContentType("application/json", expected, JsonUtil::asJson);
     }
+
 
     @Test
-    // text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User > repo
-    public void createsUsersThroughCustomController_fromCsvMediaTypeInput() throws Exception {
+    // Given a custom message converter is configured to convert given request content type into an entity class
+    //   And no custom controller is configured to consume given request content type
+    //  When POST request is made with body in the format supported by the custom message converter
+    //  Then request body is converted to entity class through the custom converter
+    //   And the record is created through Spring Data REST endpoint/repository
+    public void createsRecordsThroughSpringDataRest_fromCustomMediaTypeInputOne() {
 
-        testPostWithContentType("text/csv", user -> asCsv(user, "firstName", "lastName"), expected);
+        // Flow: made/up-1 > MadeUpFormatOneToUserHttpMessageConverter > User > UserRepository
+
+        testPostWithContentType("made/up-1", expected, ApplicationTest::asMadeUpOneFormat);
     }
+
 
     @Test
-    // made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User > repo
-    public void createsUsersThroughSpringDataRestController_fromAnotherCustomMediaTypeInput() throws Exception {
+    // Given a custom message converter is configured to consume given request content type and emit InputStream
+    //   And a custom controller is configured to consume given request content type as an InputStream
+    //  When POST request is made with body in the format supported by the custom message converter
+    //   And the record is created through the custom controller
+    public void createsRecordsThroughCustomController_fromCsvMediaTypeInput() throws Exception {
 
-        testPostWithContentType("made/up-2", ApplicationTest::asMadeUpFormat2, expected);
+        // Flow: text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User > UserRepository
+
+        testPostWithContentType("text/csv", expected, user -> asCsv(user));
     }
 
-    private void testPostWithContentType(final String contentType, final Converter<User> userConverter, final User expected) {
 
-        String endpointUri = newInstance().scheme("http").host("localhost").port(port).pathSegment("users").toUriString();
+    @Test
+    // Given Spring's StringHttpMessageConverter is configured
+    //   And a custom controller is configured to consume given request content type as a String
+    //  When POST request is made with body in the format supported by the message converter
+    //  Then request body is converted to String through the converter
+    //   And the record is created through the custom controller
+    public void createsRecordsThroughSpringDataRestController_fromCustomMediaTypeInputTwo() throws Exception {
+
+        // Flow: made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User > UserRepository
+
+        testPostWithContentType("made/up-2", expected, ApplicationTest::asMadeUpTwoFormat);
+    }
+
+
+    private void testPostWithContentType(final String contentType, final User expected, final FromTestedFormatConverter<User> userConverter) {
 
         // @formatter:off
+
         given()
             .config(config().encoderConfig(encoderConfig().encodeContentTypeAs(contentType, TEXT)))
-            .contentType(contentType).body(userConverter.toTestedFormat(expected))
+            .contentType(contentType).body(userConverter.asString(expected))
+            .log().all()
+            .filter((requestSpec, responseSpec, ctx) -> {
+                System.out.println("");
+                System.out.println("");
+                System.out.println("Response:");
+                return ctx.next(requestSpec, responseSpec);
+            })
         .when()
             .post(endpointUri)
-            .prettyPeek()
         .then()
             .contentType("application/hal+json;charset=UTF-8")
-            .body("firstName",        is(expected.getFirstName()))
-            .body("lastName",         is(expected.getLastName()))
+            .body("firstName", is(expected.getFirstName()))
+            .body("lastName", is(expected.getLastName()))
             .body("_links.self.href", startsWith(endpointUri))
             .body("_links.user.href", startsWith(endpointUri))
+            .log().all(true)
         ;
         // @formatter:on
     }
 
-    private String randomString() {
-        return UUID.randomUUID().toString();
-    }
-
-    // todo util class?
-
-    private void prettyPrint(final ResponseEntity<String> responseEntity) {
-
-        System.out.println("");
-        System.out.println("= RESPONSE =============================>");
-        System.out.println(" status: " + responseEntity.getStatusCode());
-        System.out.println("headers: " + responseEntity.getHeaders());
-        System.out.println("   body: ");
-        System.out.println(responseEntity.getBody());
-        System.out.println("<=======================================");
-        System.out.println("");
-    }
-
-    private void prettyPrint(final RequestEntity<String> requestEntity) {
-        System.out.println("");
-        System.out.println("= REQUEST ============================>");
-        System.out.println(" method: " + requestEntity.getMethod());
-        System.out.println("    uri: " + requestEntity.getUrl());
-        System.out.println("headers: " + requestEntity.getHeaders());
-        System.out.println("   body: ");
-        System.out.println(requestEntity.getBody());
-        System.out.println("<=======================================");
-        System.out.println("");
-    }
-
-    private static <T> T asObject(Class<T> clazz, String responseBody) {
-        try {
-            return OBJECT_MAPPER.readerFor(clazz).readValue(responseBody);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static String asMadeUpFormat(User user) {
+    private static String asMadeUpOneFormat(final User user) {
         return user.getFirstName() + ";" + user.getLastName();
     }
 
-    private static String asMadeUpFormat2(User user) {
+    private static String asMadeUpTwoFormat(final User user) {
         return user.getFirstName() + "|" + user.getLastName();
     }
 
-    private static String asJson(Object object) {
-        try {
-            return JSON_WRITER.writeValueAsString(object);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static String asCsv(Object object, String... fieldNames) {
-
-        // todo cleaner joiners?
+    private static String asCsv(final Object object) {
 
         // @formatter:off
+        final List<String> fieldNames = Stream.of(object.getClass().getDeclaredFields())
+            .map(Field::getName)
+            .filter(fieldName -> !"id".equals(fieldName))
+            .collect(toList());
+
         return new StringJoiner("\n")
             .add(join(",", fieldNames))
-            .add(Stream.of(fieldNames)
+            .add(fieldNames.stream()
                 .map(fieldName -> valueOf(getField((Object) object, fieldName)))
                 .collect(joining(","))
             )
@@ -178,7 +180,7 @@ public class ApplicationTest {
     }
 
     @FunctionalInterface
-    private interface Converter<T> {
-        String toTestedFormat(T source);
+    private interface FromTestedFormatConverter<T> {
+        String asString(T source);
     }
 }

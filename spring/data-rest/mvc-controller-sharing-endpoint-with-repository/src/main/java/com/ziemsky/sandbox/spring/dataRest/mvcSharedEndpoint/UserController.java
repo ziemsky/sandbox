@@ -34,11 +34,10 @@ public class UserController {
         return handleCreateUserRequest(csvToUser(body));
     }
 
-    // todo made-up content types and methods' names
     @PostMapping(path = "/users", consumes = {"made/up-2"})
     public @ResponseBody ResponseEntity<?> createUserFromMadeUp2(@RequestBody String body) {
 
-        return handleCreateUserRequest(madeUp2ToUser(body));
+        return handleCreateUserRequest(madeUpTwoToUser(body));
     }
 
     private ResponseEntity<?> handleCreateUserRequest(final User user) {
@@ -54,13 +53,13 @@ public class UserController {
     }
 
     // todo createUserFromUploadedCsv using web browser - see:
+    // - @RequestPart
+    // - http://docs.spring.io/spring/docs/current/spring-framework-reference/html/mvc.html#mvc-multipart
 
-    private User madeUp2ToUser(final @RequestBody String body) {
+    private User madeUpTwoToUser(final @RequestBody String body) {
         String[] line = body.split("\\|");
         return new User(line[0], line[1]);
     }
-    // - http://docs.spring.io/spring/docs/current/spring-framework-reference/html/mvc.html#mvc-multipart
-    // - @RequestPart
 
     private User csvToUser(final @RequestBody InputStream body) {
         try {
@@ -77,5 +76,4 @@ public class UserController {
             throw new RuntimeException(e);
         }
     }
-
 }

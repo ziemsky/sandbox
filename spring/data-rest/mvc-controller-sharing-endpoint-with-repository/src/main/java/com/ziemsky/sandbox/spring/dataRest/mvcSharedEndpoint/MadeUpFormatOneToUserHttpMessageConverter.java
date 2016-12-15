@@ -1,6 +1,5 @@
 package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
 
-import au.com.bytecode.opencsv.CSVReader;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.MediaType;
@@ -12,15 +11,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.joining;
 
 // todo tests + docs
-public class MadeUpFormatToUserHttpMessageConverter implements HttpMessageConverter<User> {
+public class MadeUpFormatOneToUserHttpMessageConverter implements HttpMessageConverter<User> {
 
-    public static final MediaType MEDIA_TYPE = new MediaType("made", "up");
+    public static final MediaType MEDIA_TYPE = new MediaType("made", "up-1");
 
     @Override
     public boolean canRead(final Class<?> clazz, final MediaType mediaType) {

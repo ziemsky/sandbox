@@ -1,6 +1,6 @@
 package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
 
-import io.restassured.filter.log.RequestLoggingFilter;
+import io.restassured.specification.RequestSpecification;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -12,6 +12,7 @@ import org.springframework.test.context.junit4.SpringRunner;
 
 import javax.annotation.PostConstruct;
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.StringJoiner;
 import java.util.stream.Stream;
@@ -23,6 +24,9 @@ import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.http.ContentType.TEXT;
 import static java.lang.String.join;
 import static java.lang.String.valueOf;
+import static java.nio.file.Files.createTempFile;
+import static java.nio.file.Files.deleteIfExists;
+import static java.nio.file.Files.write;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static org.hamcrest.Matchers.startsWith;
@@ -72,6 +76,7 @@ public class ApplicationTest {
     }
 
     @Test
+    // todo JavaDoc
     // Given no custom message converter is configured to consume JSON request content type
     //   And no custom controller is configured to consume JSON request content type
     //  When POST request is made with body in JSON format
@@ -81,9 +86,8 @@ public class ApplicationTest {
 
         // Flow: application/json > default JSON HttpMessageConverter > User > UserRepository
 
-        testPostWithContentType("application/json", expected, JsonUtil::asJson);
+        testPostWithSimpleContentType("application/json", expected, JsonUtil::asJson);
     }
-
 
     @Test
     // Given a custom message converter is configured to convert given request content type into an entity class
@@ -95,20 +99,45 @@ public class ApplicationTest {
 
         // Flow: made/up-1 > MadeUpFormatOneToUserHttpMessageConverter > User > UserRepository
 
-        testPostWithContentType("made/up-1", expected, ApplicationTest::asMadeUpOneFormat);
+        testPostWithSimpleContentType("made/up-1", expected, ApplicationTest::asMadeUpOneFormat);
     }
-
 
     @Test
     // Given a custom message converter is configured to consume given request content type and emit InputStream
     //   And a custom controller is configured to consume given request content type as an InputStream
     //  When POST request is made with body in the format supported by the custom message converter
-    //   And the record is created through the custom controller
+    //  Then the record is created through the custom controller
     public void createsRecordsThroughCustomController_fromCsvMediaTypeInput() throws Exception {
 
         // Flow: text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User > UserRepository
 
-        testPostWithContentType("text/csv", expected, user -> asCsv(user));
+        testPostWithSimpleContentType("text/csv", expected, user -> asCsv(user));
+    }
+
+    @Test
+    // Given no custom message converter is configured to consume multipart form content type
+    //   And a custom controller is configured to consume given request content type as an multipart form
+    //  When POST request is made with body in multipart form format
+    //  Then the record is created through the custom controller
+    public void createsRecordsThroughCustomController_fromUploadedCsvFile() throws Exception {
+
+        // Flow: CSV file + multipart/form-data > MultipartFile > custom MVC controller > InputStream > User > UserRepository
+
+        Path csvFile = createTempFile("test", ".csv");
+
+        try {
+            write(csvFile, asCsv(expected).getBytes());
+
+            // value of controlName is the same as that of "name" attribute in element <input type="file" ...
+            String controlName = "uploadedFile";
+
+            RequestSpecification requestSpecification = given().multiPart(controlName, csvFile.toFile());
+
+            testPost(requestSpecification, expected);
+
+        } finally {
+            deleteIfExists(csvFile);
+        }
     }
 
 
@@ -122,17 +151,25 @@ public class ApplicationTest {
 
         // Flow: made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User > UserRepository
 
-        testPostWithContentType("made/up-2", expected, ApplicationTest::asMadeUpTwoFormat);
+        testPostWithSimpleContentType("made/up-2", expected, ApplicationTest::asMadeUpTwoFormat);
     }
 
-
-    private void testPostWithContentType(final String contentType, final User expected, final FromTestedFormatConverter<User> userConverter) {
+    private void testPostWithSimpleContentType(final String contentType, final User expected, final FromTestedFormatConverter<User> userConverter) {
 
         // @formatter:off
-
-        given()
+        RequestSpecification requestSpecification = given()
             .config(config().encoderConfig(encoderConfig().encodeContentTypeAs(contentType, TEXT)))
-            .contentType(contentType).body(userConverter.asString(expected))
+            .contentType(contentType)
+            .body(userConverter.asString(expected));
+        // @formatter:on
+
+        testPost(requestSpecification, expected);
+    }
+
+    private void testPost(final RequestSpecification given, final User expected) {
+
+        // @formatter:off
+        given
             .log().all()
             .filter((requestSpec, responseSpec, ctx) -> {
                 System.out.println("");

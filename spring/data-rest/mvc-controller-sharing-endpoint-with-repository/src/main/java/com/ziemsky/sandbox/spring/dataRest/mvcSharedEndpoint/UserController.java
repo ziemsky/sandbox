@@ -10,7 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -40,7 +42,14 @@ public class UserController {
         return handleCreateUserRequest(madeUpTwoToUser(body));
     }
 
-    private ResponseEntity<?> handleCreateUserRequest(final User user) {
+    @PostMapping(path = "/users", consumes = {"multipart/form-data"})
+    public @ResponseBody ResponseEntity<?> createUserFromMadeUploadedCsvFile(@RequestParam("uploadedFile") MultipartFile file) {
+        // see https://spring.io/guides/gs/uploading-files/
+
+        return handleCreateUserRequest(uploadedCsvFileToUser(file));
+    }
+
+    private ResponseEntity<Resource<User>> handleCreateUserRequest(final User user) {
 
         final User newUser = userRepository.save(user);
 
@@ -51,19 +60,32 @@ public class UserController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(resource);
     }
-
-    // todo createUserFromUploadedCsv using web browser - see:
     // - @RequestPart
     // - http://docs.spring.io/spring/docs/current/spring-framework-reference/html/mvc.html#mvc-multipart
 
+    // todo external converter
     private User madeUpTwoToUser(final @RequestBody String body) {
         String[] line = body.split("\\|");
         return new User(line[0], line[1]);
     }
 
-    private User csvToUser(final @RequestBody InputStream body) {
+    // todo external converter
+    private User uploadedCsvFileToUser(MultipartFile file) {
+
+        InputStream inputStream = null;
         try {
-            final CSVReader csvReader = new CSVReader(new BufferedReader(new InputStreamReader(body)));
+            inputStream = file.getInputStream();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        return csvToUser(inputStream);
+    }
+
+    // todo external converter
+    private User csvToUser(final InputStream csvInputStream) {
+        try {
+            final CSVReader csvReader = new CSVReader(new BufferedReader(new InputStreamReader(csvInputStream)));
 
             final String[] line = csvReader.readAll().get(1);
 

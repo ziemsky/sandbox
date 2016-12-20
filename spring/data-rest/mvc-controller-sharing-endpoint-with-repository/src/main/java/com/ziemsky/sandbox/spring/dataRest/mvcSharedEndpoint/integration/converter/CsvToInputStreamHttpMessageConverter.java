@@ -1,4 +1,4 @@
-package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
+package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.integration.converter;
 
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
@@ -13,12 +13,10 @@ import java.util.List;
 
 import static java.util.Collections.singletonList;
 
-// todo tests + docs
-// without this CSV->String converter, SDR kept returning
-// {"timestamp":1481202185512,"status":415,"error":"Unsupported Media Type","exception":"org.springframework.web.HttpMediaTypeNotSupportedException","message":"Content type 'text/csv;charset=UTF-8' not supported","path":"/users"}
+/**
+ * Converts body of {@code text/csv} request into {@linkplain InputStream}; does not support the opposite operation.
+ */
 public class CsvToInputStreamHttpMessageConverter implements HttpMessageConverter<InputStream> {
-
-    //
 
     public static final MediaType CSV_MEDIA_TYPE = new MediaType("text", "csv");
 
@@ -37,16 +35,15 @@ public class CsvToInputStreamHttpMessageConverter implements HttpMessageConverte
         return singletonList(CSV_MEDIA_TYPE);
     }
 
-    // todo auto formatting
-    // todo comment about class being incomplete in that it expects very specific CSV format
-
     @Override
-    public InputStream read(final Class<? extends InputStream> clazz, final HttpInputMessage inputMessage) throws IOException, HttpMessageNotReadableException {
+    public InputStream read(final Class<? extends InputStream> clazz, final HttpInputMessage inputMessage) throws
+        IOException, HttpMessageNotReadableException {
         return inputMessage.getBody();
     }
 
     @Override
-    public void write(final InputStream InputStream, final MediaType contentType, final HttpOutputMessage outputMessage) throws IOException, HttpMessageNotWritableException {
+    public void write(final InputStream InputStream, final MediaType contentType, final HttpOutputMessage
+        outputMessage) throws IOException, HttpMessageNotWritableException {
         throw new UnsupportedOperationException(getClass() + " does not write CSV.");
     }
 }

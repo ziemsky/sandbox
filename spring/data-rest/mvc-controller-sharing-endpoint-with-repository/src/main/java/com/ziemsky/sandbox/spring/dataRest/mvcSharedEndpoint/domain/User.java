@@ -1,4 +1,4 @@
-package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
+package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.domain;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;

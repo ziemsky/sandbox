@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
 </head>
 <body>
+    <!-- This file illustrates the simplest file upload form; is not used in any of the automated tests here but
+     may be useful in manual testing. -->
+
     <form method="POST" enctype="multipart/form-data" action="http://localhost:8080/users">
         <input type="file" name="uploadedFile" accept=".csv">
         <input type="submit" value="Upload">

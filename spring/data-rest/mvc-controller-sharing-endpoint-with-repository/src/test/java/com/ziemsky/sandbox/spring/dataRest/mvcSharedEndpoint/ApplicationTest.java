@@ -1,5 +1,7 @@
 package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
 
+import com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.domain.User;
+import com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.util.JsonUtil;
 import io.restassured.specification.RequestSpecification;
 import org.junit.Before;
 import org.junit.Test;
@@ -17,7 +19,7 @@ import java.util.List;
 import java.util.StringJoiner;
 import java.util.stream.Stream;
 
-import static com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.RandomUtil.randomString;
+import static com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.util.RandomUtil.randomString;
 import static io.restassured.RestAssured.config;
 import static io.restassured.RestAssured.given;
 import static io.restassured.config.EncoderConfig.encoderConfig;
@@ -37,23 +39,21 @@ import static org.springframework.web.util.UriComponentsBuilder.newInstance;
 
 /**
  * <p>
- *     Demonstrates that custom Spring MVC controller can share the same endpoint as Spring Data REST repository,
- *     with requests being mapped to one or the other depending on their content type.
- * </p>
- * <p>
- *     Additionally, various ways of converting request body to format most convenient to handle by individual endpoints
- *     are exercised where some conversion is done in message converters (custom and provided by the framework) and
- *     some within custom controllers.
- * </p>
- * <p>
- *     Note that this test is satisfied with receiving expected payload and success status in response to the POST
- *     requests rather than going to the database to check that new records have actually been created there but that
- *     was enough for what it was intended for. One can verify that the requests actually go through expected handlers
- *     by disabling selected controller methods or message converters and re-running the tests.
+ * Demonstrates that custom Spring MVC controller can share the same endpoint as Spring Data REST repository,
+ * where requests are being mapped to one or the other depending on their content type.
+ * </p><p>
+ * Additionally, various ways of converting request body to format most convenient to handle by individual endpoints
+ * are exercised where some conversion is done in message converters (custom and provided by the framework) and
+ * some within custom controllers.
+ * </p><p>
+ * Note that this test is satisfied with receiving expected payload and success status in response to the POST
+ * requests rather than going to the database to check that new records have actually been created there but that
+ * was enough for what it was intended for. One can verify that the requests actually go through expected handlers
+ * by disabling selected controller methods or message converters and seeing test fail.
  * </p>
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+@SpringBootTest(classes = Application.class, webEnvironment = RANDOM_PORT)
 public class ApplicationTest {
 
     @Autowired
@@ -75,13 +75,16 @@ public class ApplicationTest {
         endpointUri = newInstance().scheme("http").host("localhost").port(port).pathSegment("users").toUriString();
     }
 
+    /**
+     * <pre>
+     * Given no custom message converter is configured to consume JSON request content type
+     *   And no custom controller is configured to consume JSON request content type
+     *  When POST request is made with body in JSON format
+     *  Then request body is converted to entity class through default Jackson object mapper
+     *   And the record is created through Spring Data REST endpoint/repository
+     * </pre>
+     */
     @Test
-    // todo JavaDoc
-    // Given no custom message converter is configured to consume JSON request content type
-    //   And no custom controller is configured to consume JSON request content type
-    //  When POST request is made with body in JSON format
-    //  Then request body is converted to entity class through default Jackson object mapper
-    //   And the record is created through Spring Data REST endpoint/repository
     public void createsRecordsThroughSpringDataRest_fromJsonMediaTypeInput() {
 
         // Flow: application/json > default JSON HttpMessageConverter > User > UserRepository
@@ -89,12 +92,16 @@ public class ApplicationTest {
         testPostWithSimpleContentType("application/json", expected, JsonUtil::asJson);
     }
 
+    /**
+     * <pre>
+     * Given a custom message converter is configured to convert given request content type into an entity class
+     *   And no custom controller is configured to consume given request content type
+     *  When POST request is made with body in the format supported by the custom message converter
+     *  Then request body is converted to entity class through the custom converter
+     *   And the record is created through Spring Data REST endpoint/repository
+     * </pre>
+     */
     @Test
-    // Given a custom message converter is configured to convert given request content type into an entity class
-    //   And no custom controller is configured to consume given request content type
-    //  When POST request is made with body in the format supported by the custom message converter
-    //  Then request body is converted to entity class through the custom converter
-    //   And the record is created through Spring Data REST endpoint/repository
     public void createsRecordsThroughSpringDataRest_fromCustomMediaTypeInputOne() {
 
         // Flow: made/up-1 > MadeUpFormatOneToUserHttpMessageConverter > User > UserRepository
@@ -102,26 +109,36 @@ public class ApplicationTest {
         testPostWithSimpleContentType("made/up-1", expected, ApplicationTest::asMadeUpOneFormat);
     }
 
+    /**
+     * <pre>
+     * Given a custom message converter is configured to consume given request content type and emit InputStream
+     *   And a custom controller is configured to consume given request content type as an InputStream
+     *  When POST request is made with body in the format supported by the custom message converter
+     *  Then the record is created through the custom controller
+     * </pre>
+     */
     @Test
-    // Given a custom message converter is configured to consume given request content type and emit InputStream
-    //   And a custom controller is configured to consume given request content type as an InputStream
-    //  When POST request is made with body in the format supported by the custom message converter
-    //  Then the record is created through the custom controller
     public void createsRecordsThroughCustomController_fromCsvMediaTypeInput() throws Exception {
 
-        // Flow: text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User > UserRepository
+        // Flow: text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User >
+        // UserRepository
 
         testPostWithSimpleContentType("text/csv", expected, user -> asCsv(user));
     }
 
+    /**
+     * <pre>
+     * Given no custom message converter is configured to consume multipart form content type
+     *   And a custom controller is configured to consume given request content type as an multipart form
+     *  When POST request is made with body in multipart form format
+     *  Then the record is created through the custom controller
+     * </pre>
+     */
     @Test
-    // Given no custom message converter is configured to consume multipart form content type
-    //   And a custom controller is configured to consume given request content type as an multipart form
-    //  When POST request is made with body in multipart form format
-    //  Then the record is created through the custom controller
     public void createsRecordsThroughCustomController_fromUploadedCsvFile() throws Exception {
 
-        // Flow: CSV file + multipart/form-data > MultipartFile > custom MVC controller > InputStream > User > UserRepository
+        // Flow: CSV file + multipart/form-data > MultipartFile > custom MVC controller > InputStream > User >
+        // UserRepository
 
         Path csvFile = createTempFile("test", ".csv");
 
@@ -140,21 +157,26 @@ public class ApplicationTest {
         }
     }
 
-
+    /**
+     * <pre>
+     * Given Spring's StringHttpMessageConverter is configured
+     *   And a custom controller is configured to consume given request content type as a String
+     *  When POST request is made with body in the format supported by the message converter
+     *  Then request body is converted to String through the converter
+     *   And the record is created through the custom controller
+     * </pre>
+     */
     @Test
-    // Given Spring's StringHttpMessageConverter is configured
-    //   And a custom controller is configured to consume given request content type as a String
-    //  When POST request is made with body in the format supported by the message converter
-    //  Then request body is converted to String through the converter
-    //   And the record is created through the custom controller
     public void createsRecordsThroughSpringDataRestController_fromCustomMediaTypeInputTwo() throws Exception {
 
-        // Flow: made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User > UserRepository
+        // Flow: made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User >
+        // UserRepository
 
         testPostWithSimpleContentType("made/up-2", expected, ApplicationTest::asMadeUpTwoFormat);
     }
 
-    private void testPostWithSimpleContentType(final String contentType, final User expected, final FromTestedFormatConverter<User> userConverter) {
+    private void testPostWithSimpleContentType(final String contentType, final User expected,
+                                               final FromTestedFormatConverter<User> userConverter) {
 
         // @formatter:off
         RequestSpecification requestSpecification = given()
@@ -180,12 +202,12 @@ public class ApplicationTest {
         .when()
             .post(endpointUri)
         .then()
+            .log().all(true)
             .contentType("application/hal+json;charset=UTF-8")
             .body("firstName", is(expected.getFirstName()))
             .body("lastName", is(expected.getLastName()))
             .body("_links.self.href", startsWith(endpointUri))
             .body("_links.user.href", startsWith(endpointUri))
-            .log().all(true)
         ;
         // @formatter:on
     }

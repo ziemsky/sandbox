@@ -1,5 +1,6 @@
-package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint;
+package com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.integration.converter;
 
+import com.ziemsky.sandbox.spring.dataRest.mvcSharedEndpoint.domain.User;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.MediaType;
@@ -14,7 +15,10 @@ import java.util.List;
 
 import static java.util.Collections.singletonList;
 
-// todo tests + docs
+/**
+ * Converts body of request with custom {@code made/up-1} content type into a {@linkplain User} object; does not support
+ * the opposite operation.
+ */
 public class MadeUpFormatOneToUserHttpMessageConverter implements HttpMessageConverter<User> {
 
     public static final MediaType MEDIA_TYPE = new MediaType("made", "up-1");
@@ -34,11 +38,9 @@ public class MadeUpFormatOneToUserHttpMessageConverter implements HttpMessageCon
         return singletonList(MEDIA_TYPE);
     }
 
-    // todo auto formatting
-    // todo comment about class being incomplete in that it expects very specific CSV format
-
     @Override
-    public User read(final Class<? extends User> clazz, final HttpInputMessage inputMessage) throws IOException, HttpMessageNotReadableException {
+    public User read(final Class<? extends User> clazz, final HttpInputMessage inputMessage) throws IOException,
+        HttpMessageNotReadableException {
 
         BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputMessage.getBody()));
         final String line = bufferedReader.lines().findFirst().get();
@@ -52,7 +54,8 @@ public class MadeUpFormatOneToUserHttpMessageConverter implements HttpMessageCon
     }
 
     @Override
-    public void write(final User user, final MediaType contentType, final HttpOutputMessage outputMessage) throws IOException, HttpMessageNotWritableException {
+    public void write(final User user, final MediaType contentType, final HttpOutputMessage outputMessage) throws
+        IOException, HttpMessageNotWritableException {
         throw new UnsupportedOperationException(getClass() + " does not write CSV.");
     }
 }

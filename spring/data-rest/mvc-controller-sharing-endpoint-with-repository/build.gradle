@@ -1,6 +1,10 @@
 group 'com.ziemsky.sandbox.spring.data-rest.mvc-shared-endpoint'
 version '1.0-SNAPSHOT'
 
+description =
+'Demonstrates how to plug custom Spring MVC controller so that it listens on the same endpoint as Spring Data REST ' +
+        'repository where calls are dispatched to one or another depending on their Content-Type header.'
+
 buildscript {
     repositories {
         mavenCentral()
@@ -37,3 +41,40 @@ dependencies {
     testCompile("org.springframework.boot:spring-boot-starter-test")
     testCompile('io.rest-assured:rest-assured:3.0.1')
 }
+
+defaultTasks 'keyTasks'
+
+task keyTasks {
+    doLast {
+        logger.quiet(
+'''
+============================================================================
+
+''' + "Project: $project.name" + '''
+
+Description: ''' + project.description + '''
+
+Key tasks:
+
+    test           - Executes all tests available in this project.
+    
+    bootRun        - Starts the application making it listen on port 8080.
+                     Hit Ctrl+C to terminate.
+    
+    help           - Gradle help.
+    
+    tasks          - All tasks available in this build.
+
+    To execute any of the above TASKs, navigate to the root directory of
+    this repository and execute:
+    
+'''
++ "                   ./gradlew $project.path:TASK" +
+'''
+
+============================================================================
+'''
+        )
+    }
+}
+keyTasks.dependsOn help

@@ -57,10 +57,10 @@ import static org.springframework.web.util.UriComponentsBuilder.newInstance;
 public class ApplicationTest {
 
     @Autowired
-    TestRestTemplate testRestTemplate;
+    private TestRestTemplate testRestTemplate;
 
     @LocalServerPort
-    int port;
+    private int port;
 
     private User expected;
     private String endpointUri;
@@ -73,23 +73,6 @@ public class ApplicationTest {
     @PostConstruct
     public void beforeAllTests() {
         endpointUri = newInstance().scheme("http").host("localhost").port(port).pathSegment("users").toUriString();
-    }
-
-    /**
-     * <pre>
-     * Given no custom message converter is configured to consume JSON request content type
-     *   And no custom controller is configured to consume JSON request content type
-     *  When POST request is made with body in JSON format
-     *  Then request body is converted to entity class through default Jackson object mapper
-     *   And the record is created through Spring Data REST endpoint/repository
-     * </pre>
-     */
-    @Test
-    public void createsRecordsThroughSpringDataRest_fromJsonMediaTypeInput() {
-
-        // Flow: application/json > default JSON HttpMessageConverter > User > UserRepository
-
-        testPostWithSimpleContentType("application/json", expected, JsonUtil::asJson);
     }
 
     /**
@@ -111,6 +94,24 @@ public class ApplicationTest {
 
     /**
      * <pre>
+     * Given Spring's StringHttpMessageConverter is configured
+     *   And a custom controller is configured to consume given request content type as a String
+     *  When POST request is made with body in the format supported by the message converter
+     *  Then request body is converted to String through the converter
+     *   And the record is created through the custom controller
+     * </pre>
+     */
+    @Test
+    public void createsRecordsThroughSpringDataRestController_fromCustomMediaTypeInputTwo() throws Exception {
+
+        // Flow: made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User >
+        //       UserRepository
+
+        testPostWithSimpleContentType("made/up-2", expected, ApplicationTest::asMadeUpTwoFormat);
+    }
+
+    /**
+     * <pre>
      * Given a custom message converter is configured to consume given request content type and emit InputStream
      *   And a custom controller is configured to consume given request content type as an InputStream
      *  When POST request is made with body in the format supported by the custom message converter
@@ -120,10 +121,10 @@ public class ApplicationTest {
     @Test
     public void createsRecordsThroughCustomController_fromCsvMediaTypeInput() throws Exception {
 
-        // Flow: text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller > User >
-        // UserRepository
+        // Flow: text/csv > CsvToInputStreamHttpMessageConverter > InputStream > custom MVC controller
+        //       secondary converter > User > UserRepository
 
-        testPostWithSimpleContentType("text/csv", expected, user -> asCsv(user));
+        testPostWithSimpleContentType("text/csv", expected, ApplicationTest::asCsv);
     }
 
     /**
@@ -138,17 +139,17 @@ public class ApplicationTest {
     public void createsRecordsThroughCustomController_fromUploadedCsvFile() throws Exception {
 
         // Flow: CSV file + multipart/form-data > MultipartFile > custom MVC controller > InputStream > User >
-        // UserRepository
+        //       UserRepository
 
-        Path csvFile = createTempFile("test", ".csv");
+        final Path csvFile = createTempFile("test", ".csv");
 
         try {
             write(csvFile, asCsv(expected).getBytes());
 
             // value of controlName is the same as that of "name" attribute in element <input type="file" ...
-            String controlName = "uploadedFile";
+            final String controlName = "uploadedFile";
 
-            RequestSpecification requestSpecification = given().multiPart(controlName, csvFile.toFile());
+            final RequestSpecification requestSpecification = given().multiPart(controlName, csvFile.toFile());
 
             testPost(requestSpecification, expected);
 
@@ -159,30 +160,30 @@ public class ApplicationTest {
 
     /**
      * <pre>
-     * Given Spring's StringHttpMessageConverter is configured
-     *   And a custom controller is configured to consume given request content type as a String
-     *  When POST request is made with body in the format supported by the message converter
-     *  Then request body is converted to String through the converter
-     *   And the record is created through the custom controller
+     * Given no custom message converter is configured to consume JSON request content type
+     *   And no custom controller is configured to consume JSON request content type
+     *  When POST request is made with body in JSON format
+     *  Then request body is converted to entity class through default Jackson object mapper
+     *   And the record is created through Spring Data REST endpoint/repository
      * </pre>
      */
     @Test
-    public void createsRecordsThroughSpringDataRestController_fromCustomMediaTypeInputTwo() throws Exception {
+    public void createsRecordsThroughSpringDataRest_fromJsonMediaTypeInput() {
 
-        // Flow: made/up-2 > Spring's StringHttpMessageConverter > String > custom MVC controller > User >
-        // UserRepository
+        // Flow: application/json > default JSON HttpMessageConverter > User > UserRepository
 
-        testPostWithSimpleContentType("made/up-2", expected, ApplicationTest::asMadeUpTwoFormat);
+        testPostWithSimpleContentType("application/json", expected, JsonUtil::asJson);
     }
 
     private void testPostWithSimpleContentType(final String contentType, final User expected,
                                                final FromTestedFormatConverter<User> userConverter) {
 
         // @formatter:off
-        RequestSpecification requestSpecification = given()
-            .config(config().encoderConfig(encoderConfig().encodeContentTypeAs(contentType, TEXT)))
-            .contentType(contentType)
-            .body(userConverter.asString(expected));
+        final RequestSpecification requestSpecification =
+            given()
+                .config(config().encoderConfig(encoderConfig().encodeContentTypeAs(contentType, TEXT)))
+                .contentType(contentType)
+                .body(userConverter.asString(expected));
         // @formatter:on
 
         testPost(requestSpecification, expected);

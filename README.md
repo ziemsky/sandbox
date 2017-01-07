@@ -38,6 +38,18 @@ Sandbox is structured as a [hierarchy of projects][gradle multi project builds]:
   
 ## Licence
 
+All source code in this repository is licenced to use as specified in [MIT licence][mit licence].
+
+The summary of the intention for allowed use of the code from this repository: 
+* Feel free to use it in any form (source code or binary) and for any purpose (personal use or commercial).
+* Feel free to use entire files or snippets of the code with or without modifications or simply use it as examples to
+  inspire your own solutions.
+* You don't have to state my authorship in any way and you don't have to include any specific licence.
+* Don't hold me responsible for any results of using this code.
+
+For more details of this licence see:
+* The [LICENCE][licence file] file included in this project.
+* [Licence][mit licence] section of [opensource.org].
  
 
 [gradle]:                       https://gradle.org/getting-started-gradle/
@@ -49,3 +61,7 @@ Sandbox is structured as a [hierarchy of projects][gradle multi project builds]:
 [spring mvc]:                   http://docs.spring.io/spring/docs/current/spring-framework-reference/html/mvc.html
 
 [content-type header]:          https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type
+
+[mit licence]:                  https://opensource.org/licenses/MIT
+[licence file]:                 LICENSE
+[opensource.org]:               https://opensource.org
